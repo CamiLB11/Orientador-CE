@@ -211,3 +211,218 @@ mapeo_tema(medicina, biologia).
 mapeo_tema(cerebro, cerebro).
 mapeo_tema(salud, biologia).
 
+% SECCIÓN 4: GRAMATICA DCG (BNF en Prolog)
+% Estructura formal de las oraciones del usuario
+
+% Regla raiz 
+% oracion --> sintagma_nominal sintagma_verbal
+%           | sintagma_verbal           
+
+oracion(Intent, Tema) -->
+    sintagma_nominal,
+    sintagma_verbal(Intent, Tema).
+
+oracion(Intent, Tema) -->
+    sintagma_verbal(Intent, Tema).
+
+% Sintagma Nominal 
+sintagma_nominal -->
+    [pronombre_tok], { true }.
+
+sintagma_nominal -->
+    [yo].
+
+sintagma_nominal -->
+    [el].
+
+sintagma_nominal -->
+    [ella].
+
+% Permite oraciones que empiezan sin sujeto
+sintagma_nominal --> [].
+
+% Sintagma Verbal 
+% Combina verbo + complemento para extraer intencion y tema
+
+% Caso: verbo afirmativo + complemento
+% Ej: "amo las matematicas", "me gusta la tecnologia"
+sintagma_verbal(afirmativo, Tema) -->
+    verbo_af_tok,
+    complemento(Tema).
+
+% Caso: verbo negativo + complemento
+sintagma_verbal(negativo, Tema) -->
+    verbo_neg_tok,
+    complemento(Tema).
+
+% Caso: negación + verbo + complemento
+sintagma_verbal(negativo, Tema) -->
+    negacion_tok,
+    verbo_af_tok,
+    complemento(Tema).
+
+sintagma_verbal(negativo, Tema) -->
+    negacion_tok,
+    complemento(Tema).
+
+% Caso: "me intereso por las personas"
+sintagma_verbal(afirmativo, Tema) -->
+    [me],
+    verbo_af_tok,
+    complemento(Tema).
+
+% Caso: intensificador que indica negacion parcial
+sintagma_verbal(negativo, ninguno) -->
+    negacion_tok,
+    intensificador_tok.
+
+% Caso: intensificador afirmativo solo
+sintagma_verbal(afirmativo, ninguno) -->
+    intensificador_tok.
+
+% Complemento 
+% Extrae el tema de la frase
+complemento(Tema) -->
+    determinante_tok,
+    sustantivo_tema(Tema).
+
+complemento(Tema) -->
+    sustantivo_tema(Tema).
+
+complemento(Tema) -->
+    intensificador_tok,
+    sustantivo_tema(Tema).
+
+complemento(Tema) -->
+    determinante_tok,
+    intensificador_tok,
+    sustantivo_tema(Tema).
+
+% Complemento con preposicion: "por las personas", "con tecnologia"
+complemento(Tema) -->
+    preposicion_tok,
+    determinante_tok,
+    sustantivo_tema(Tema).
+
+complemento(Tema) -->
+    preposicion_tok,
+    sustantivo_tema(Tema).
+
+% Complemento compuesto (varios temas, toma el primero relevante)
+complemento(Tema) -->
+    sustantivo_tema(Tema),
+    complemento(_).
+
+% Sin tema identificable
+complemento(ninguno) -->
+    [_].
+
+% SECCIÓN 5: TERMINALES DCG
+% Conectan la gramática con el lexico
+
+verbo_af_tok --> [W], { verbo_afirmativo(W) }.
+verbo_neg_tok --> [W], { verbo_negativo(W) }.
+negacion_tok  --> [W], { palabra_negacion(W) }.
+determinante_tok --> [W], { determinante(W) }.
+intensificador_tok --> [W], { intensificador(W) }.
+preposicion_tok --> [por] ; [con] ; [a] ; [en] ; [de].
+
+% Sustantivo tema: conecta token con atomo de BD.pl
+sustantivo_tema(Tema) --> [W], { mapeo_tema(W, Tema) }.
+
+% SECCIÓN 6: CLASIFICADOR HEURISTICO
+% Analiza tokens directamente cuando la gramatica no parsea
+
+% clasificar_heuristico(+Tokens, -Intencion, -Tema)
+% Busca patrones en la lista de tokens sin gramatica formal
+clasificar_heuristico(Tokens, Intencion, Tema) :-
+    % Detectar negación
+    (   tiene_negacion(Tokens)
+    ->  Intencion = negativo
+    ;   tiene_afirmacion(Tokens)
+    ->  Intencion = afirmativo
+    ;   Intencion = no_entendido
+    ),
+    % Detectar tema
+    (   extraer_tema(Tokens, Tema)
+    ->  true
+    ;   Tema = ninguno
+    ).
+
+% Verifica si hay palabra de negacion en los tokens
+tiene_negacion(Tokens) :-
+    member(T, Tokens),
+    palabra_negacion(T), !.
+
+% Tambien si hay verbo con carga negativa
+tiene_negacion(Tokens) :-
+    member(T, Tokens),
+    verbo_negativo(T), !.
+
+% Verifica si hay palabra de afirmacion en los tokens
+tiene_afirmacion(Tokens) :-
+    member(T, Tokens),
+    verbo_afirmativo(T), !.
+
+tiene_afirmacion(Tokens) :-
+    member(T, Tokens),
+    (T = correcto ; T = exacto ; T = claro ; T = definitivamente ;
+     T = absolutamente ; T = totalmente ; T = efectivamente), !.
+
+% Extrae el primer tema identificable de la lista
+extraer_tema([H|_], Tema) :-
+    mapeo_tema(H, Tema), !.
+extraer_tema([_|T], Tema) :-
+    extraer_tema(T, Tema).
+
+% SECCIÓN 7: PREDICADO PRINCIPAL
+% Interfaz que Logic.pl usara
+
+% parsear_respuesta(+OracionStr, -Intencion, -Tema)
+% OracionStr : string con la respuesta del usuario
+% Intencion  : afirmativo | negativo | no_entendido
+%
+% Ejemplo de uso desde Logic.pl:
+%   parsear_respuesta("Yo amo las matematicas", I, T)
+%   I = afirmativo, T = matematicas
+
+parsear_respuesta(OracionStr, Intencion, Tema) :-
+    tokenizar(OracionStr, Tokens),
+    (
+        % Intento 1: Parsing completo con DCG
+        phrase(oracion(Intencion, Tema), Tokens)
+    ->
+        true
+    ;
+        % Intento 2: Parsing parcial (ignora tokens no reconocidos)
+        parsing_parcial(Tokens, Intencion, Tema)
+    ->
+        true
+    ;
+        % Intento 3: Heuristica por palabras clave
+        clasificar_heuristico(Tokens, Intencion, Tema)
+    ->
+        true
+    ;
+        % Fallback: no se entendio
+        Intencion = no_entendido,
+        Tema = ninguno
+    ).
+
+% parsing_parcial/3
+% Intenta parsear con subconjunto de los tokens
+parsing_parcial(Tokens, Intencion, Tema) :-
+    filtrar_tokens_relevantes(Tokens, Relevantes),
+    Relevantes \= [],
+    clasificar_heuristico(Relevantes, Intencion, Tema).
+
+% Filtra solo tokens que el lexico reconoce
+filtrar_tokens_relevantes([], []).
+filtrar_tokens_relevantes([H|T], [H|R]) :-
+    (   verbo_afirmativo(H) ; verbo_negativo(H) ;
+        palabra_negacion(H) ; mapeo_tema(H, _) ;
+        intensificador(H)
+    ), !,
+    filtrar_tokens_relevantes(T, R).
+filtrar_tokens_relevantes([_|T], R) :-
+    filtrar_tokens_relevantes(T, R).
