@@ -29,19 +29,18 @@ hacer_preguntas :-
 lista_preguntas([
     '¿Te gustan las matematicas?',
     '¿Te interesa la tecnologia?',
-    '¿Te gusta trabajar con personas?',
     '¿Te gusta la creatividad o el arte?',
     '¿Te interesa la investigacion?',
     '¿Te gusta ayudar a otros?',
     '¿Te gusta liderar grupos?',
     '¿Prefieres trabajar en equipo?',
-    '¿Te gusta la naturaleza o el aire libre?',
+    '¿Te gusta la naturaleza?',
     '¿Te interesan los negocios o emprender?',
     '¿Te gusta analizar problemas?',
-    '¿Te gusta comunicar ideas (hablar o escribir)?',
+    '¿Te gusta comunicar ideas (ya sea hablando o escribiendo)?',
     '¿Prefieres trabajar solo?',
     '¿Te gusta resolver desafios?',
-    '¿Te interesa la ciencia o experimentos?'
+    '¿Te interesa la ciencia o hacer experimentos?'
 ]).
 
 hacer_lista_preguntas([]).
